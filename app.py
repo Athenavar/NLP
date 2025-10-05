@@ -1,62 +1,57 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import re
-import nltk
-from nltk.corpus import stopwords
-from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from nltk.corpus import stopwords
+import nltk
 
-# Download stopwords (only first run)
+# Download stopwords
 nltk.download('stopwords')
 stop_words = set(stopwords.words('english'))
 
-st.set_page_config(
-    page_title="📰 News Article Classifier",
-    page_icon="📰",
-    layout="centered"
-)
+# Streamlit page config
+st.set_page_config(page_title="News Article Classifier", page_icon="📰", layout="centered")
 
+# Header
 st.markdown("<h1 style='text-align: center; color: #2F4F4F;'>📰 News Article Classifier</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: grey;'>Enter any news article to predict its category</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: grey;'>Enter a news article to predict its category</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-# Load CSV from repo
+# ------------------ Load CSV ------------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv("labelled_newscatcher_dataset.csv")  # Must be uploaded in your repo
-    df = df[['title', 'topic']]  # Keep only required columns
+    # Load Topic-Labeled News dataset
+    df = pd.read_csv("labelled_newscatcher_dataset[1].csv", engine='python')
+    
+    # Keep only 1000 samples per category
+    df = df.groupby('category').head(1000).reset_index(drop=True)
     return df
 
 df = load_data()
 
-# Preprocess
+# ------------------ Preprocessing ------------------
 def preprocess(text):
-    text = text.lower()
+    text = str(text).lower()
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     words = [w for w in text.split() if w not in stop_words]
     return ' '.join(words)
 
-# Train model
+# ------------------ Train Model ------------------
 @st.cache_data
 def train_model(data):
-    data['clean_text'] = data['title'].apply(preprocess)
-    X_train, X_test, y_train, y_test = train_test_split(
-        data['clean_text'], data['topic'], test_size=0.2, random_state=42
-    )
-    vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1,2))
-    X_train_tfidf = vectorizer.fit_transform(X_train)
+    data['clean_text'] = data['text'].apply(preprocess)
+    vectorizer = TfidfVectorizer(max_features=5000)
+    X = vectorizer.fit_transform(data['clean_text'])
+    y = data['category']
     
-    model = LogisticRegression(max_iter=300)
-    model.fit(X_train_tfidf, y_train)
-    
+    model = MultinomialNB()
+    model.fit(X, y)
     return model, vectorizer
 
 model, vectorizer = train_model(df)
 
-# User input
+# ------------------ Prediction ------------------
 user_input = st.text_area("Paste your news article here:", height=200)
 
 if st.button("Predict Category"):
@@ -66,11 +61,12 @@ if st.button("Predict Category"):
         prediction = model.predict(vector_input)[0]
         probs = model.predict_proba(vector_input)[0]
         categories = model.classes_
-
+        
         st.markdown(f"<h3 style='color: green;'>Predicted Category: {prediction.upper()}</h3>", unsafe_allow_html=True)
         st.markdown("### Confidence per category:")
+        
         for cat, prob in sorted(zip(categories, probs), key=lambda x: x[1], reverse=True):
             st.markdown(f"**{cat}**")
-            st.progress(int(prob * 100))
+            st.progress(int(prob*100))
     else:
         st.warning("⚠️ Please enter some text to classify!")
