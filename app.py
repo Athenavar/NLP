@@ -12,7 +12,7 @@ stop_words = set(stopwords.words('english'))
 
 # Streamlit page config
 st.set_page_config(
-    page_title="BBC News Classifier",
+    page_title="News Classifier",
     page_icon="📰",
     layout="centered"
 )
