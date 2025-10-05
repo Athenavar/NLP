@@ -20,13 +20,19 @@ st.markdown("---")
 
 # ------------------ Load CSV ------------------
 @st.cache_data
+
 def load_data():
-    # Load Topic-Labeled News dataset
-    df = pd.read_csv("labelled_newscatcher_dataset[1].csv", engine='python')
-    
+    # Load CSV, skip bad lines
+    df = pd.read_csv(
+        "labelled_newscatcher_dataset[1].csv",
+        engine='python',
+        on_bad_lines='skip',
+        encoding='utf-8'
+    )
     # Keep only 1000 samples per category
     df = df.groupby('category').head(1000).reset_index(drop=True)
     return df
+
 
 df = load_data()
 
