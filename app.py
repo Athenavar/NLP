@@ -12,7 +12,7 @@ stop_words = set(stopwords.words("english"))
 
 st.set_page_config(page_title="BBC News Classifier")
 
-st.title("📰 BBC News Article Classifier")
+st.title("📰News Article Classifier")
 st.write("Enter a news article to predict its category.")
 
 # Load CSV
