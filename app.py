@@ -17,8 +17,8 @@ st.set_page_config(
     layout="centered"
 )
 
-st.markdown("<h1 style='text-align: center; color: #2F4F4F;'>📰 BBC News Classifier</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: grey;'>Enter any BBC news article to predict its category</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center; color: #2F4F4F;'>📰 News Classifier</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: grey;'>Enter any news article to predict its category</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # Load BBC dataset
