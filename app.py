@@ -26,7 +26,7 @@ st.markdown("---")
 # Load CSV from repo
 @st.cache_data
 def load_data():
-    df = pd.read_csv("selected_categories_news.csv")  # Must be uploaded in your repo
+    df = pd.read_csv("labelled_newscatcher_dataset[1].csv")  # Must be uploaded in your repo
     df = df[['title', 'topic']]  # Keep only required columns
     return df
 
