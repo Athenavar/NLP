@@ -5,5 +5,5 @@ nltk
 matplotlib
 wordcloud
 textblob
-torch==2.1.0 +cpu
+
 
