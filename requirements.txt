@@ -1,9 +1,10 @@
+
+
+
 streamlit
 pandas
+numpy
 scikit-learn
-nltk
-matplotlib
-wordcloud
+transformers
+tensorflow
 textblob
-
-
