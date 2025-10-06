@@ -119,4 +119,4 @@ if st.button("Predict Category") and user_input.strip() != "":
     for idx in top_idx:
         st.write(f"{df.loc[idx, 'title']} (Source: {df.loc[idx, 'domain']})")
 else:
-    st.info("⚠️ Enter some text above and click 'Predict Category' to see results.")
+    st.info("Enter some text above and click 'Predict Category' to see results.")
