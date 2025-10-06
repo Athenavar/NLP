@@ -1,59 +1,46 @@
 import streamlit as st
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from torch.nn.functional import softmax
-from textblob import TextBlob
 import pandas as pd
+from transformers import pipeline
+from textblob import TextBlob
 
-st.set_page_config(page_title="News Article Classifier", layout="wide")
+# --- Load your dataset ---
+# Here, using a placeholder CSV, you can replace with Newscatcher dataset
+@st.cache_data
+def load_dataset(path):
+    return pd.read_csv(path)
 
-@st.cache_resource(show_spinner=True)
-def load_model_and_tokenizer(model_path="./news_classifier_model"):
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSequenceClassification.from_pretrained(model_path)
-    model.eval()
-    return tokenizer, model
+df = load_dataset("newscatcher_dataset.csv")  # replace with your dataset path
 
-@st.cache_data(show_spinner=True)
-def load_categories(dataset_path="newscatcher_dataset.csv"):
-    df = pd.read_csv(dataset_path)
-    categories = df['category'].unique().tolist()
-    return categories
+# --- BERT Classifier via Transformers (TF backend) ---
+@st.cache_resource
+def get_classifier():
+    return pipeline("text-classification", model="distilbert-base-uncased-finetuned-sst-2-english", framework="tf")
 
-# Load model and categories
-tokenizer, model = load_model_and_tokenizer()
-categories = load_categories()
+classifier = get_classifier()
 
-st.title("📰 News Article Classifier (BERT + NewsCatcher)")
-
+# --- Streamlit UI ---
+st.title("📰 News Article Classifier")
 article = st.text_area("Paste your news article here:")
 
 if st.button("Predict"):
-    if not article.strip():
-        st.warning("Please enter a news article.")
+    if article.strip() == "":
+        st.warning("Please enter an article.")
     else:
-        # Tokenize and predict
-        inputs = tokenizer(article, return_tensors="pt", truncation=True, padding=True, max_length=512)
-        with torch.no_grad():
-            outputs = model(**inputs)
-            probs = softmax(outputs.logits, dim=1).squeeze().tolist()
-            pred_index = int(torch.argmax(outputs.logits))
-        
-        predicted_category = categories[pred_index]
-        confidences = {categories[i]: round(prob*100,2) for i, prob in enumerate(probs)}
-        
+        # Category prediction
+        result = classifier(article)[0]
+        category = result['label']  # e.g., POSITIVE/NEGATIVE (can replace with your custom trained model)
+        confidence = result['score']
+
         # Sentiment
-        sentiment = TextBlob(article).sentiment
-        polarity = round(sentiment.polarity, 2)
-        subjectivity = round(sentiment.subjectivity, 2)
-        sentiment_label = "Positive" if polarity > 0 else "Negative" if polarity < 0 else "Neutral"
+        sentiment = TextBlob(article).sentiment.polarity
+        if sentiment > 0:
+            sentiment_label = "Positive"
+        elif sentiment < 0:
+            sentiment_label = "Negative"
+        else:
+            sentiment_label = "Neutral"
 
-        st.subheader("Predicted Category")
-        st.success(predicted_category)
-
-        st.subheader("Confidence per Category")
-        for cat, conf in confidences.items():
-            st.write(f"{cat}: {conf}%")
-
-        st.subheader("Sentiment of Article")
-        st.write(f"Polarity: {polarity} | Subjectivity: {subjectivity} | Sentiment: {sentiment_label}")
+        # Display results
+        st.subheader("Prediction")
+        st.write(f"**Predicted Category:** {category} ({confidence*100:.2f}% confidence)")
+        st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
