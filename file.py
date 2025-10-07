@@ -6,33 +6,23 @@ from sklearn.naive_bayes import MultinomialNB
 from textblob import TextBlob
 import altair as alt
 import spacy
-from spacy.cli import download as spacy_download
 from googletrans import Translator
 
-# --- Load spaCy model ---
-with st.spinner("Loading NLP model..."):
-    try:
-        nlp = spacy.load("en_core_web_sm")
-    except OSError:
-        spacy_download("en_core_web_sm")
-        nlp = spacy.load("en_core_web_sm")
-
-translator = Translator()
-
-# --- Load Dataset ---
+# --- Load Dataset (balanced subset: 1000 per topic) ---
 @st.cache_data
-def load_dataset(path):
+def load_dataset(path, n_per_topic=1000):
     df = pd.read_csv(path, sep=';', on_bad_lines='skip')
-    df['text'] = df['title'].fillna('')  # Using title only
-    df['topic'] = df['topic'].fillna('Unknown')
-    return df
+    df['text'] = df['title'].fillna('')
+    # Sample n_per_topic per topic
+    df_balanced = df.groupby('topic', group_keys=False).apply(lambda x: x.sample(min(len(x), n_per_topic)))
+    return df_balanced
 
-df = load_dataset("labelled_newscatcher_dataset[1].csv")
+df = load_dataset("labelled_newscatcher_dataset[1].csv", n_per_topic=1000)
 
-# --- Train Model ---
+# --- Train model ---
 @st.cache_resource
 def train_model(df):
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=2000)
     X = vectorizer.fit_transform(df['text'])
     y = df['topic']
     model = MultinomialNB()
@@ -41,52 +31,54 @@ def train_model(df):
 
 vectorizer, model = train_model(df)
 
-# --- Streamlit UI ---
-st.title("📰 News Article Classifier & Sentiment Analysis")
+# --- Load spaCy model ---
+@st.cache_resource
+def load_spacy():
+    return spacy.load("en_core_web_sm")
 
-st.subheader("Enter a news article (multiple languages supported):")
+nlp = load_spacy()
+translator = Translator()
+
+# --- Streamlit UI ---
+st.title("📰 News Classifier + Sentiment + NER")
+
 article = st.text_area("Paste your news article here:")
 
 if st.button("Predict"):
-    if article.strip() == "":
+    if not article.strip():
         st.warning("Please enter a news article.")
     else:
-        # Translate to English if needed
-        try:
-            translated = translator.translate(article, dest='en').text
-        except Exception:
-            translated = article  # fallback
+        # --- Translate if not English ---
+        lang = translator.detect(article).lang
+        if lang != 'en':
+            article_en = translator.translate(article, dest='en').text
+        else:
+            article_en = article
 
-        # Prediction
-        X_input = vectorizer.transform([translated])
+        # --- Predict category ---
+        X_input = vectorizer.transform([article_en])
         prediction = model.predict(X_input)[0]
         probs = model.predict_proba(X_input)[0]
 
-        # Sentiment
-        sentiment_score = TextBlob(translated).sentiment.polarity
-        sentiment_label = "Positive" if sentiment_score > 0 else "Negative" if sentiment_score < 0 else "Neutral"
+        # --- Sentiment ---
+        sentiment = TextBlob(article_en).sentiment.polarity
+        sentiment_label = "Positive" if sentiment > 0 else "Negative" if sentiment < 0 else "Neutral"
 
-        # Named Entity Recognition
-        doc = nlp(translated)
+        # --- NER ---
+        doc = nlp(article_en)
         entities = [(ent.text, ent.label_) for ent in doc.ents]
 
-        # Display results
+        # --- Display results ---
         st.subheader("Prediction Result")
         st.write(f"**Predicted Category:** {prediction}")
-        st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment_score:.2f})")
+        st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
+        st.write("**Named Entities:**", entities if entities else "None detected")
 
-        st.subheader("Prediction Confidence per Category")
+        # --- Confidence Pie Chart ---
         df_probs = pd.DataFrame({'Category': model.classes_, 'Confidence': probs})
-        pie = alt.Chart(df_probs).mark_arc().encode(
-            theta="Confidence",
-            color="Category",
-            tooltip=["Category", "Confidence"]
+        chart = alt.Chart(df_probs).mark_arc().encode(
+            theta=alt.Theta(field="Confidence", type="quantitative"),
+            color=alt.Color(field="Category", type="nominal"),
+            tooltip=['Category', 'Confidence']
         )
-        st.altair_chart(pie, use_container_width=True)
-
-        if entities:
-            st.subheader("Named Entities (NER)")
-            for text, label in entities:
-                st.write(f"{text} ({label})")
-        else:
-            st.write("No named entities found.")
+        st.altair_chart(chart, use_container_width=True)
