@@ -12,7 +12,7 @@ def load_dataset(path):
     df['text'] = df['title'].fillna('') + " " + df['content'].fillna('')
     return df
 
-df = load_dataset("labelled_newscatcher[1].csv")  # replace with your dataset path
+df = load_dataset("labelled_newscatcher_dataset[1].csv")  # replace with your dataset path
 
 # --- TF-IDF + Naive Bayes Model Training ---
 @st.cache_resource
