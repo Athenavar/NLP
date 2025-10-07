@@ -1,6 +1,6 @@
 plotly
 spacy
-
+googletrans
 streamlit
 pandas
 numpy
