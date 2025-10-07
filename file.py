@@ -25,7 +25,7 @@ def load_dataset(path):
     df['text'] = df['title']
     return df
 
-df = load_dataset("labelled_newscatcher.csv")
+df = load_dataset("labelled_newscatcher_dataset[1].csv")
 
 if df.empty:
     st.stop()
