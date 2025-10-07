@@ -4,14 +4,12 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from textblob import TextBlob
-import matplotlib.pyplot as plt
+import altair as alt  # altair is preinstalled in Streamlit Cloud
 
 # --- Load Dataset ---
 @st.cache_data
 def load_dataset(path):
-    # CSV is semicolon-separated; skip malformed lines
     df = pd.read_csv(path, sep=';', on_bad_lines='skip')
-    # Create 'text' column combining title + content (if content exists)
     df['text'] = df['title'].fillna('') + " " + df.get('content', '').fillna('')
     return df
 
@@ -59,9 +57,15 @@ if st.button("Predict"):
         st.write(f"**Predicted Category:** {prediction}")
         st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
 
-        # Confidence pie chart
+        # Confidence bar chart using Altair
         st.subheader("Prediction Confidence per Category")
-        plt.figure(figsize=(6,6))
-        plt.pie(probs, labels=model.classes_, autopct='%1.1f%%', startangle=140, colors=plt.cm.tab20.colors)
-        plt.axis('equal')
-        st.pyplot(plt)
+        df_probs = pd.DataFrame({
+            'Category': model.classes_,
+            'Confidence': probs
+        })
+        chart = alt.Chart(df_probs).mark_bar().encode(
+            x='Category',
+            y='Confidence',
+            color='Category'
+        )
+        st.altair_chart(chart, use_container_width=True)
