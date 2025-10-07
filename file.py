@@ -8,11 +8,18 @@ from textblob import TextBlob
 # --- Load Dataset ---
 @st.cache_data
 def load_dataset(path):
-    df = pd.read_csv(path)
-    df['text'] = df['title'].fillna('') + " " + df['content'].fillna('')
+    df = pd.read_csv(
+        path,
+        sep=';',             # semicolon-separated CSV
+        engine='python',
+        encoding='utf-8',
+        on_bad_lines='skip'  # skip bad lines
+    )
+    df['text'] = df['title'].fillna('')  # use only title
+    df.rename(columns={'topic':'category'}, inplace=True)
     return df
 
-df = load_dataset("labelled_newscatcher_dataset[1].csv")  # replace with your dataset path
+df = load_dataset("labelled_newscatcher_dataset[1].csv")
 
 # --- TF-IDF + Naive Bayes Model Training ---
 @st.cache_resource
@@ -57,12 +64,7 @@ if st.button("Predict"):
 
         # Sentiment Analysis
         sentiment = TextBlob(article).sentiment.polarity
-        if sentiment > 0:
-            sentiment_label = "Positive"
-        elif sentiment < 0:
-            sentiment_label = "Negative"
-        else:
-            sentiment_label = "Neutral"
+        sentiment_label = "Positive" if sentiment > 0 else "Negative" if sentiment < 0 else "Neutral"
 
         # Display results
         st.subheader("Prediction")
@@ -70,10 +72,3 @@ if st.button("Predict"):
         st.write("**Confidence per category:**")
         st.write(prob_dict)
         st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
-
-        # Related articles
-        st.subheader("Related Articles from Dataset")
-        df['similarity'] = df['text'].apply(lambda x: np.dot(vectorizer.transform([x]).toarray(), X_input.toarray().T)[0][0])
-        top_idx = df['similarity'].nlargest(5).index
-        for idx in top_idx:
-            st.write(f"{df.loc[idx, 'title']} (Source: {df.loc[idx, 'domain']})")
