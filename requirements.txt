@@ -8,3 +8,9 @@ scikit-learn
 transformers
 tensorflow
 textblob
+
+
+altair
+deep-translator
+requests
+
