@@ -4,38 +4,29 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from textblob import TextBlob
-from googletrans import Translator
-import altair as alt
 
 # --- Load Dataset ---
 @st.cache_data
 def load_dataset(path):
-    try:
-        df = pd.read_csv(path, sep=';', on_bad_lines='skip')
-    except FileNotFoundError:
-        st.error("CSV file not found. Make sure it's in your app folder.")
-        return pd.DataFrame()
-    
-    # Only keep the 'title' column and 'topic'
-    df = df[['title', 'topic']].dropna()
-    
-    # Take only 1000 samples per topic to speed things up
-    df = df.groupby('topic').head(1000).reset_index(drop=True)
-    
-    df['text'] = df['title']
+    df = pd.read_csv(
+        path,
+        sep=';',             # semicolon-separated CSV
+        engine='python',
+        encoding='utf-8',
+        on_bad_lines='skip'  # skip bad lines
+    )
+    df['text'] = df['title'].fillna('')  # use only title
+    df.rename(columns={'topic':'category'}, inplace=True)
     return df
 
 df = load_dataset("labelled_newscatcher_dataset[1].csv")
 
-if df.empty:
-    st.stop()
-
-# --- Train Model ---
+# --- TF-IDF + Naive Bayes Model Training ---
 @st.cache_resource
 def train_model(df):
     vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
     X = vectorizer.fit_transform(df['text'])
-    y = df['topic']
+    y = df['category']
     model = MultinomialNB()
     model.fit(X, y)
     return vectorizer, model
@@ -43,44 +34,41 @@ def train_model(df):
 vectorizer, model = train_model(df)
 
 # --- Streamlit UI ---
-st.title("📰 News Article Classifier & Sentiment Analysis")
+st.title("📰 News Article Classifier & Dashboard")
 
-st.subheader("Enter a news article:")
+# Dataset Analytics
+st.subheader("📊 Dataset Dashboard")
+st.write("Category Distribution")
+category_counts = df['category'].value_counts()
+st.bar_chart(category_counts)
+
+st.subheader("Top Keywords per Category")
+for cat in df['category'].unique():
+    text = ' '.join(df[df['category']==cat]['text'].tolist())
+    tfidf = TfidfVectorizer(stop_words='english', max_features=10)
+    top_keywords = tfidf.fit([text]).get_feature_names_out()
+    st.write(f"**{cat} Keywords:** {', '.join(top_keywords)}")
+
+# Article input
+st.subheader("Enter any news article to predict its category and see analytics")
 article = st.text_area("Paste your news article here:")
-
-language_option = st.selectbox("Translate Article?", ["No", "Yes"])
 
 if st.button("Predict"):
     if article.strip() == "":
-        st.warning("Please enter a news article.")
+        st.warning("Please enter an article.")
     else:
-        # --- Multi-language support ---
-        if language_option == "Yes":
-            translator = Translator()
-            try:
-                article = translator.translate(article, dest='en').text
-            except:
-                st.warning("Translation failed. Proceeding with original text.")
-        
-        # --- Prediction ---
         X_input = vectorizer.transform([article])
         prediction = model.predict(X_input)[0]
         probs = model.predict_proba(X_input)[0]
-        
-        # --- Sentiment ---
+        prob_dict = dict(zip(model.classes_, probs))
+
+        # Sentiment Analysis
         sentiment = TextBlob(article).sentiment.polarity
         sentiment_label = "Positive" if sentiment > 0 else "Negative" if sentiment < 0 else "Neutral"
-        
-        # --- Display ---
-        st.subheader("Prediction Result")
+
+        # Display results
+        st.subheader("Prediction")
         st.write(f"**Predicted Category:** {prediction}")
+        st.write("**Confidence per category:**")
+        st.write(prob_dict)
         st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
-        
-        st.subheader("Prediction Confidence per Category")
-        df_probs = pd.DataFrame({'Category': model.classes_, 'Confidence': probs})
-        chart = alt.Chart(df_probs).mark_arc().encode(
-            theta="Confidence",
-            color="Category",
-            tooltip=['Category', 'Confidence']
-        )
-        st.altair_chart(chart, use_container_width=True)
