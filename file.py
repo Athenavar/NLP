@@ -1,91 +1,58 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import re
-import altair as alt
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from textblob import TextBlob
-import spacy
+import altair as alt  # preinstalled in Streamlit
 
-# -------------------------------
-# Load English NER model
-# -------------------------------
-try:
-    nlp = spacy.load("en_core_web_sm")
-except:
-    st.error("spaCy English model not found. Run `python -m spacy download en_core_web_sm`.")
-    st.stop()
-
-# -------------------------------
-# Load and train model
-# -------------------------------
+# --- Load Dataset ---
 @st.cache_data
 def load_dataset(path):
-    try:
-        df = pd.read_csv(path, sep=';', on_bad_lines='skip')
-    except Exception:
-        df = pd.read_csv(path, on_bad_lines='skip')
-
-    if 'title' not in df.columns or 'topic' not in df.columns:
-        st.error("CSV must contain 'title' and 'topic' columns.")
-        return pd.DataFrame()
-
-    df['text'] = df['title'].fillna('')
+    df = pd.read_csv(path, sep=';', on_bad_lines='skip')
+    # Only use 'title' column since 'content' doesn't exist
+    df['text'] = df['title'].fillna('')  
     return df
 
+df = load_dataset("labelled_newscatcher_dataset[1].csv")
+
+# --- TF-IDF + Naive Bayes Model Training ---
 @st.cache_resource
 def train_model(df):
-    vectorizer = TfidfVectorizer(stop_words='english', max_features=3000)
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=5000)
     X = vectorizer.fit_transform(df['text'])
-    y = df['topic']
+    y = df['topic']  # 'topic' is the category column
     model = MultinomialNB()
     model.fit(X, y)
     return vectorizer, model
 
-# -------------------------------
-# Perform NER
-# -------------------------------
-def perform_ner(text):
-    doc = nlp(text)
-    entities = [(ent.text, ent.label_) for ent in doc.ents]
-    return entities
+vectorizer, model = train_model(df)
 
-# -------------------------------
-# Streamlit App
-# -------------------------------
-st.set_page_config(page_title="News Analyzer", page_icon="🧠", layout="centered")
-st.title("🧠 News Category, Sentiment & NER (English Only)")
+# --- Streamlit UI ---
+st.title("📰 News Article Classifier & Sentiment Analysis")
 
-st.write("Analyze an English news article for its category, sentiment, and named entities.")
+st.subheader("Enter a news article:")
+article = st.text_area("Paste your news article here:")
 
-# Dataset loading
-csv_path = st.text_input("Enter your dataset path:", "labelled_newscatcher_dataset[1].csv")
-
-df = load_dataset(csv_path)
-if not df.empty:
-    vectorizer, model = train_model(df)
-else:
-    st.stop()
-
-# User input
-article = st.text_area("📰 Paste your news article here:", height=200)
-
-if st.button("Analyze"):
+if st.button("Predict"):
     if article.strip() == "":
         st.warning("Please enter a news article.")
     else:
-        # -----------------------------
-        # 1️⃣ Category Prediction
-        # -----------------------------
         X_input = vectorizer.transform([article])
         prediction = model.predict(X_input)[0]
         probs = model.predict_proba(X_input)[0]
 
-        st.subheader("📂 Predicted Category")
-        st.write(f"**Category:** {prediction}")
+        # Sentiment analysis
+        sentiment = TextBlob(article).sentiment.polarity
+        sentiment_label = "Positive" if sentiment > 0 else "Negative" if sentiment < 0 else "Neutral"
 
-        # Confidence chart
+        # Display prediction
+        st.subheader("Prediction Result")
+        st.write(f"**Predicted Category:** {prediction}")
+        st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
+
+        # Confidence per category
+        st.subheader("Prediction Confidence per Category")
         df_probs = pd.DataFrame({'Category': model.classes_, 'Confidence': probs})
         chart = alt.Chart(df_probs).mark_bar().encode(
             x='Category',
@@ -93,23 +60,3 @@ if st.button("Analyze"):
             color='Category'
         )
         st.altair_chart(chart, use_container_width=True)
-
-        # -----------------------------
-        # 2️⃣ Sentiment Analysis
-        # -----------------------------
-        sentiment = TextBlob(article).sentiment.polarity
-        sentiment_label = "Positive" if sentiment > 0 else "Negative" if sentiment < 0 else "Neutral"
-
-        st.subheader("💬 Sentiment")
-        st.write(f"**Sentiment:** {sentiment_label} (Polarity: {sentiment:.2f})")
-
-        # -----------------------------
-        # 3️⃣ Named Entity Recognition
-        # -----------------------------
-        st.subheader("🧩 Named Entities (NER)")
-        entities = perform_ner(article)
-        if entities:
-            df_entities = pd.DataFrame(entities, columns=["Entity", "Label"])
-            st.dataframe(df_entities, use_container_width=True)
-        else:
-            st.write("No entities found in the text.")
