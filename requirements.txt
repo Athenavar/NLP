@@ -8,8 +8,8 @@ scikit-learn
 transformers
 tensorflow
 textblob
-
-
+spacy==3.7.2
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1.tar.gz
 altair
 deep-translator
 requests
